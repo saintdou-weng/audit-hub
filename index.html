@@ -238,6 +238,7 @@ select.cs option{background:var(--s3)}
   <span class="ak-label" id="ak-label">⚠ 需要 Gemini API Key 才能分析</span>
   <input id="ak-input" type="password" placeholder="AIzaSy…" autocomplete="off" oninput="onKeyInput()">
   <button id="ak-save" onclick="saveKey()">儲存</button>
+  <button id="ak-test" onclick="testKey()" style="padding:6px 12px;border-radius:7px;background:transparent;border:1px solid var(--bd);color:var(--muted);font-family:DM Mono,monospace;font-size:11px;cursor:pointer">測試</button>
   <span id="ak-status"></span>
 </div>
 
@@ -622,6 +623,31 @@ function onKeyInput(){
   const v=document.getElementById('ak-input').value.trim();
   if(v.startsWith('AIza')&&v.length>20) updateKeyBar(v,true);
 }
+async function testKey(){
+  const inp=document.getElementById('ak-input');
+  let v=inp.value.trim();
+  if(!v||v.includes('…')) v=getKey();
+  if(!v){showToast('請先貼上 Key');return;}
+  document.getElementById('ak-status').textContent='測試中…';
+  try{
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${v}`);
+    if(r.ok){
+      document.getElementById('ak-status').textContent='✓ Key 有效！';
+      document.getElementById('ak-status').style.color='var(--green)';
+      // auto save if valid
+      localStorage.setItem('vrt_gak',v);sessionStorage.setItem('vrt_gak',v);
+      updateKeyBar(v);
+      showToast('✓ Key 有效，已自動儲存');
+    } else {
+      const d=await r.json().catch(()=>({}));
+      document.getElementById('ak-status').textContent='✗ Key 無效：'+r.status;
+      document.getElementById('ak-status').style.color='var(--red)';
+    }
+  }catch(e){
+    document.getElementById('ak-status').textContent='✗ 網路錯誤';
+    document.getElementById('ak-status').style.color='var(--red)';
+  }
+}
 function updateKeyBar(key,preview=false){
   const bar=document.getElementById('apikey-bar');
   const lbl=document.getElementById('ak-label');
@@ -645,12 +671,22 @@ function clearKeyDisplay(){
 }
 // init on load
 (function initKey(){
+  const inp=document.getElementById('ak-input');
   const k=getKey();
-  if(k){updateKeyBar(k);document.getElementById('ak-input').value=k.slice(0,10)+'…'+k.slice(-4);}
-  document.getElementById('ak-input').addEventListener('focus',function(){
-    const k=getKey();if(k)this.value=k;
+  if(k){updateKeyBar(k);inp.value=k.slice(0,12)+'…'+k.slice(-4);}
+  // On focus: clear mask so user can paste cleanly
+  inp.addEventListener('focus',function(){
+    this.value='';
+    this.type='text';
+    this.placeholder='貼上 AIzaSy… 的 Key';
   });
-  document.getElementById('ak-input').addEventListener('keydown',function(e){
+  inp.addEventListener('blur',function(){
+    this.type='password';
+    const k=getKey();
+    if(k&&!this.value){this.value=k.slice(0,12)+'…'+k.slice(-4);}
+    this.placeholder='AIzaSy…';
+  });
+  inp.addEventListener('keydown',function(e){
     if(e.key==='Enter')saveKey();
   });
 })();
