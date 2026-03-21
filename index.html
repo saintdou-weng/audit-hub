@@ -87,7 +87,7 @@ main{display:flex;flex:1;overflow:hidden}
 #left{width:280px;min-width:280px;background:#fff;border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
 #dropzone{margin:12px;border:2px dashed #b0b8d0;border-radius:12px;padding:22px 14px;text-align:center;cursor:pointer;position:relative;transition:all .2s;flex-shrink:0}
 #dropzone:hover,#dropzone.over{border-color:var(--accent);background:rgba(91,138,255,.05)}
-#dropzone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+#file-input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .dz-icon{font-size:26px;margin-bottom:7px}
 .dz-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;margin-bottom:4px}
 .dz-sub{font-size:10px;color:var(--muted);line-height:1.6}
@@ -298,7 +298,7 @@ select.cs option{background:var(--s3)}
         <span class="fmt">PDF</span><span class="fmt">Word</span><span class="fmt">Excel</span>
         <span class="fmt">圖片</span><span class="fmt">Email</span><span class="fmt">其他</span>
       </div>
-      <button onclick="event.stopPropagation();document.getElementById('folder-input').click()" style="margin-top:10px;padding:5px 14px;border-radius:6px;border:1px solid var(--bd);background:transparent;color:var(--muted);font-family:DM Mono,monospace;font-size:11px;cursor:pointer">📁 選擇整個資料夾</button>
+      <button id="folder-btn" style="position:relative;z-index:10;margin-top:10px;padding:5px 14px;border-radius:6px;border:1px solid var(--bd);background:var(--s1);color:var(--muted);font-family:DM Mono,monospace;font-size:11px;cursor:pointer">📁 選擇整個資料夾</button>
     </div>
     <div class="qhdr">文件佇列 <span class="qcount" id="qc">0</span></div>
     <div id="qlist"></div>
@@ -475,24 +475,28 @@ const SKIP_NAMES=new Set(['ds_store','.ds_store','thumbs.db','desktop.ini','.git
 const SKIP_EXTS=new Set(['ini','lnk','tmp','url','exe','dll','sys']);
 
 function handleFiles(files) {
-  const arr=Array.isArray(files)?files:[...files];
-  let added=0;
+  const arr = Array.isArray(files) ? [...files] : [...files];
+  if(!arr.length){ showToast('沒有讀到任何檔案'); return; }
+  const SKIP = new Set(['ds_store','.ds_store','thumbs.db','desktop.ini']);
+  const SKIP_EXT = new Set(['ini','lnk','tmp','exe','dll','sys','db']);
+  let added = 0;
   for(const f of arr){
-    if(!f||!f.name)continue;
-    if(f.name.startsWith('.'))continue;
-    if(SKIP_NAMES.has(f.name.toLowerCase()))continue;
-    const dotIdx=f.name.lastIndexOf('.');
-    const ext=dotIdx>=0?f.name.slice(dotIdx+1).toLowerCase():'';
-    if(SKIP_EXTS.has(ext))continue;
-    // skip bare directories (no extension, no size, no type)
-    if(!ext&&f.size===0&&!f.type)continue;
-    queue.push({id:uid(),file:f,name:f.name,ext:ext.toUpperCase()||'FILE',
-      status:'pending',result:null,corrected:false,accepted:false});
+    if(!f || !f.name) continue;
+    if(f.name.startsWith('.')) continue;
+    if(SKIP.has(f.name.toLowerCase())) continue;
+    const dotIdx = f.name.lastIndexOf('.');
+    const ext = dotIdx >= 0 ? f.name.slice(dotIdx+1).toLowerCase() : '';
+    if(SKIP_EXT.has(ext)) continue;
+    queue.push({
+      id: uid(), file: f, name: f.name,
+      ext: ext ? ext.toUpperCase() : 'FILE',
+      status: 'pending', result: null, corrected: false, accepted: false
+    });
     added++;
   }
-  if(added>0) showToast(`✓ 加入 ${added} 個檔案，開始 AI 分析…`);
-  renderQueue();showMain();updateTypeCounts();
-  if(!busy)processNext();
+  showToast(added > 0 ? '✓ 加入 '+added+' 個檔案，開始分析…' : '沒有讀到檔案，請再試一次');
+  renderQueue(); showMain(); updateTypeCounts();
+  if(!busy) processNext();
 }
 function uid(){return Date.now()+'_'+Math.random().toString(36).slice(2)}
 
@@ -691,6 +695,16 @@ function clearKeyDisplay(){}
     if(e.key==='Enter'){ e.preventDefault(); saveKey(); }
   });
 })();
+
+// Folder button listener (needs to be after DOM ready)
+document.addEventListener('DOMContentLoaded', function(){
+  const fb = document.getElementById('folder-btn');
+  if(fb) fb.addEventListener('click', function(e){
+    e.stopPropagation(); e.preventDefault();
+    document.getElementById('folder-input').click();
+  });
+});
+
 function b64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f)})}
 function txt(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsText(f,'utf-8')})}
 function dupCheck(result,cid){
