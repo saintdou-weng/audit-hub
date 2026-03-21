@@ -625,9 +625,11 @@ function onKeyInput(){
 }
 async function testKey(){
   const inp=document.getElementById('ak-input');
+  // Always prefer what's actually typed; fall back to stored key
   let v=inp.value.trim();
-  if(!v||v.includes('…')) v=getKey();
-  if(!v){showToast('請先貼上 Key');return;}
+  // If input looks like masked dots or partial display, use stored key
+  if(!v||!v.startsWith('AIza')) v=getKey();
+  if(!v||!v.startsWith('AIza')){showToast('請先點輸入框，貼上完整 AIzaSy… Key');return;}
   document.getElementById('ak-status').textContent='測試中…';
   try{
     const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${v}`);
