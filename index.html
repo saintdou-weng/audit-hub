@@ -236,7 +236,7 @@ select.cs option{background:var(--s3)}
 <!-- API KEY BAR -->
 <div id="apikey-bar">
   <span class="ak-label" id="ak-label">⚠ 需要 Gemini API Key 才能分析</span>
-  <input id="ak-input" type="password" placeholder="AIzaSy…" autocomplete="off" oninput="onKeyInput()">
+  <input id="ak-input" type="text" placeholder="貼上 AIzaSy… 完整 Key" autocomplete="off" spellcheck="false" style="letter-spacing:.02em">
   <button id="ak-save" onclick="saveKey()">儲存</button>
   <button id="ak-test" onclick="testKey()" style="padding:6px 12px;border-radius:7px;background:transparent;border:1px solid var(--bd);color:var(--muted);font-family:DM Mono,monospace;font-size:11px;cursor:pointer">測試</button>
   <span id="ak-status"></span>
@@ -607,92 +607,90 @@ async function callClaude(content){
 }
 
 // ── API KEY MANAGEMENT ──
+// Use a module-level variable to hold the pending key - never rely on input.value for saving
+let _pendingKey = '';
+
 function getKey(){
-  return sessionStorage.getItem('vrt_gak')||localStorage.getItem('vrt_gak')||'';
+  return localStorage.getItem('vrt_gak')||sessionStorage.getItem('vrt_gak')||'';
 }
 function saveKey(){
-  const v=document.getElementById('ak-input').value.trim();
-  if(!v){showToast('請先貼上 API Key');return;}
-  if(!v.startsWith('AIza')){showToast('⚠ Key 格式不對，Gemini Key 應以 AIza 開頭');return;}
-  localStorage.setItem('vrt_gak',v);
-  sessionStorage.setItem('vrt_gak',v);
-  updateKeyBar(v);
+  const v = _pendingKey || document.getElementById('ak-input').value.trim();
+  const clean = v.replace(/\s/g,'');
+  if(!clean){ showToast('請先貼上 Key'); return; }
+  if(!clean.startsWith('AIza')){ showToast('⚠ Key 應以 AIza 開頭'); return; }
+  localStorage.setItem('vrt_gak', clean);
+  sessionStorage.setItem('vrt_gak', clean);
+  _pendingKey = '';
+  updateKeyBar(clean);
   showToast('✓ API Key 已儲存');
 }
-function onKeyInput(){
-  const v=document.getElementById('ak-input').value.trim();
-  if(v.startsWith('AIza')&&v.length>20) updateKeyBar(v,true);
-}
 async function testKey(){
-  const inp=document.getElementById('ak-input');
-  // Always prefer what's actually typed; fall back to stored key
-  let v=inp.value.trim();
-  // If input looks like masked dots or partial display, use stored key
-  if(!v||!v.startsWith('AIza')) v=getKey();
-  if(!v||!v.startsWith('AIza')){showToast('請先點輸入框，貼上完整 AIzaSy… Key');return;}
-  document.getElementById('ak-status').textContent='測試中…';
+  const stored = getKey();
+  if(!stored){ showToast('請先儲存 Key'); return; }
+  document.getElementById('ak-status').textContent = '測試中…';
+  document.getElementById('ak-status').style.color = 'var(--muted)';
   try{
-    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${v}`);
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key='+stored);
     if(r.ok){
-      document.getElementById('ak-status').textContent='✓ Key 有效！';
-      document.getElementById('ak-status').style.color='var(--green)';
-      // auto save if valid
-      localStorage.setItem('vrt_gak',v);sessionStorage.setItem('vrt_gak',v);
-      updateKeyBar(v);
-      showToast('✓ Key 有效，已自動儲存');
+      document.getElementById('ak-status').textContent = '✓ Key 有效！';
+      document.getElementById('ak-status').style.color = 'var(--green)';
+      showToast('✓ Key 有效，可以開始分析');
     } else {
-      const d=await r.json().catch(()=>({}));
-      document.getElementById('ak-status').textContent='✗ Key 無效：'+r.status;
-      document.getElementById('ak-status').style.color='var(--red)';
+      document.getElementById('ak-status').textContent = '✗ Key 無效 '+r.status;
+      document.getElementById('ak-status').style.color = 'var(--red)';
+      showToast('Key 無效，請重新貼上');
     }
-  }catch(e){
-    document.getElementById('ak-status').textContent='✗ 網路錯誤';
-    document.getElementById('ak-status').style.color='var(--red)';
+  } catch(e){
+    document.getElementById('ak-status').textContent = '✗ 網路錯誤';
+    document.getElementById('ak-status').style.color = 'var(--red)';
   }
 }
-function updateKeyBar(key,preview=false){
-  const bar=document.getElementById('apikey-bar');
-  const lbl=document.getElementById('ak-label');
-  const st=document.getElementById('ak-status');
-  if(key&&key.startsWith('AIza')){
+function onKeyInput(){
+  const v = document.getElementById('ak-input').value.trim();
+  _pendingKey = v;
+  if(v.startsWith('AIza') && v.length > 20) updateKeyBar(v, true);
+}
+function updateKeyBar(key, preview=false){
+  const bar = document.getElementById('apikey-bar');
+  const lbl = document.getElementById('ak-label');
+  const st  = document.getElementById('ak-status');
+  if(key && key.startsWith('AIza')){
     bar.classList.add('ok');
-    lbl.textContent='✓ API Key 已設定';
-    st.textContent=preview?'':'已加密儲存於本機';
-    // mask display
-    document.getElementById('ak-input').value=key.slice(0,10)+'…'+key.slice(-4);
+    lbl.textContent = '✓ API Key 已設定';
+    if(!preview) st.textContent = '';
   } else {
     bar.classList.remove('ok');
-    lbl.textContent='⚠ 需要 Gemini API Key 才能分析';
-    st.textContent='';
+    lbl.textContent = '⚠ 需要 Gemini API Key 才能分析';
+    st.textContent = '';
   }
 }
-function clearKeyDisplay(){
-  // allow re-edit
-  const k=getKey();
-  if(k) document.getElementById('ak-input').value=k;
-}
+function clearKeyDisplay(){}
 // init on load
 (function initKey(){
-  const inp=document.getElementById('ak-input');
-  const k=getKey();
-  if(k){updateKeyBar(k);inp.value=k.slice(0,12)+'…'+k.slice(-4);}
-  // On focus: clear mask so user can paste cleanly
-  inp.addEventListener('focus',function(){
-    this.value='';
-    this.type='text';
-    this.placeholder='貼上 AIzaSy… 的 Key';
+  const inp = document.getElementById('ak-input');
+  const k = getKey();
+  if(k){ updateKeyBar(k); inp.placeholder = k.slice(0,12)+'…'+k.slice(-4); }
+  // On focus: clear so user can paste fresh
+  inp.addEventListener('focus', function(){
+    this.value = '';
+    this.type = 'text';
+    this.placeholder = '貼上完整 AIzaSy… Key 後按儲存';
   });
-  inp.addEventListener('blur',function(){
-    this.type='password';
-    const k=getKey();
-    if(k&&!this.value){this.value=k.slice(0,12)+'…'+k.slice(-4);}
-    this.placeholder='AIzaSy…';
+  inp.addEventListener('blur', function(){
+    this.type = 'password';
+    const k = getKey();
+    if(k && !_pendingKey){ this.value=''; this.placeholder = k.slice(0,12)+'…'+k.slice(-4); }
   });
-  inp.addEventListener('keydown',function(e){
-    if(e.key==='Enter')saveKey();
+  inp.addEventListener('paste', function(e){
+    setTimeout(()=>{
+      _pendingKey = this.value.trim().replace(/\s/g,'');
+      if(_pendingKey.startsWith('AIza')) updateKeyBar(_pendingKey, true);
+    }, 50);
   });
-})();
-function b64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f)})}
+  inp.addEventListener('keydown', function(e){
+    if(e.key==='Enter'){ e.preventDefault(); saveKey(); }
+  });
+})();unction b64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f)})}
 function txt(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsText(f,'utf-8')})}
 function dupCheck(result,cid){
   const newTypes=result.auditTypes||[];
