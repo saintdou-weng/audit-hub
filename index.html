@@ -690,7 +690,8 @@ function clearKeyDisplay(){}
   inp.addEventListener('keydown', function(e){
     if(e.key==='Enter'){ e.preventDefault(); saveKey(); }
   });
-})();unction b64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f)})}
+})();
+function b64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f)})}
 function txt(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsText(f,'utf-8')})}
 function dupCheck(result,cid){
   const newTypes=result.auditTypes||[];
